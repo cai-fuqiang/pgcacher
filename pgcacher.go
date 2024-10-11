@@ -104,6 +104,17 @@ func (pg *pgcacher) getProcessMaps(pid int) []string {
 	return out
 }
 
+func isBlockDevice(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	mode := info.Mode()
+	return mode&os.ModeDevice != 0 && mode&os.ModeCharDevice == 0, nil
+}
+
+
 func (pg *pgcacher) getProcessFdFiles(pid int) []string {
 	dpath := fmt.Sprintf("/proc/%d/fd", pid)
 
@@ -125,7 +136,18 @@ func (pg *pgcacher) getProcessFdFiles(pid int) []string {
 			return
 		}
 		if strings.HasPrefix(target, "/dev") { // ignore devices
-			return
+			isBlock, err := isBlockDevice(fpath)
+			if err != nil {
+				log.Printf("can not determine if '%s' is a block device file, err: %v\n", 
+					fpath, err.Error())
+				return
+			}
+			if ! isBlock {
+				return
+			}
+			if ! pg.option.statBlockdev {
+				return
+			}
 		}
 		if pg.ignoreFile(target) {
 			return

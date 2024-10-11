@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 // page cache status
@@ -35,6 +38,34 @@ type PcStatus struct {
 	Cached    int       `json:"cached"`    // number of pages that are cached
 	Uncached  int       `json:"uncached"`  // number of pages that are not cached
 	Percent   float64   `json:"percent"`   // percentage of pages cached
+}
+
+const BLKGETSIZE64 = 0x80081272
+
+func _isBlockDevice(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	mode := info.Mode()
+	return mode&os.ModeDevice != 0 && mode&os.ModeCharDevice == 0, nil
+}
+
+func getBlockDeviceSize(path string) (int64, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	var size int64
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, file.Fd(), BLKGETSIZE64, uintptr(unsafe.Pointer(&size)))
+	if errno != 0 {
+		return 0, errno
+	}
+
+	return size, nil
 }
 
 func GetPcStatus(fname string, filter func(f *os.File) error) (PcStatus, error) {
@@ -62,12 +93,22 @@ func GetPcStatus(fname string, filter func(f *os.File) error) (PcStatus, error) 
 	if finfo.IsDir() {
 		return pcs, errors.New("file is a directory")
 	}
-
-	pcs.Size = finfo.Size()
+	isBlock, err := _isBlockDevice(fname)
+	if err != nil {
+		return pcs, err
+	}
+	if isBlock {
+		pcs.Size, err = getBlockDeviceSize(fname)
+		if err != nil {
+			return pcs, err
+		}
+	} else {
+		pcs.Size = finfo.Size()
+	}
 	pcs.Timestamp = time.Now()
 	pcs.Mtime = finfo.ModTime()
 
-	mincore, err := GetFileMincore(f, finfo.Size())
+	mincore, err := GetFileMincore(f, pcs.Size)
 	if err != nil {
 		return pcs, err
 	}

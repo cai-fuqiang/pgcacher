@@ -13,7 +13,7 @@ import (
 
 type option struct {
 	pid, worker, depth, limit             int
-	top, terse, json, unicode             bool
+	top, terse, json, unicode, statBlockdev  bool
 	plain, bname                          bool
 	leastSize, excludeFiles, includeFiles string
 }
@@ -30,6 +30,7 @@ func init() {
 	flag.StringVar(&globalOption.leastSize, "least-size", "0mb", "ignore files smaller than the lastSize, such as 10MB and 15GB")
 	flag.StringVar(&globalOption.excludeFiles, "exclude-files", "", "exclude the specified files by wildcard, such as 'a*c?d' and '*xiaorui*,rfyiamcool'")
 	flag.StringVar(&globalOption.includeFiles, "include-files", "", "only include the specified files by wildcard, such as 'a*c?d' and '*xiaorui?cc,rfyiamcool'")
+	flag.BoolVar(&globalOption.statBlockdev, "statblockdev", false, "stat block dev, may execute very SLOW !")
 
 	// show params
 	flag.BoolVar(&globalOption.terse, "terse", false, "show terse output")
